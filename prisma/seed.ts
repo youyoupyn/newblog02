@@ -1,17 +1,22 @@
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 
-const adapter = new PrismaLibSql({
-  url: process.env.DATABASE_URL || "file:./dev.db",
-});
-const prisma = new PrismaClient({ adapter });
+function createAdapter() {
+  const url = process.env.DATABASE_URL || "";
+  if (url.startsWith("postgresql://") || url.startsWith("postgres://")) {
+    return new PrismaPg({ connectionString: url });
+  }
+  return new PrismaLibSql({ url });
+}
+
+const prisma = new PrismaClient({ adapter: createAdapter() });
 
 async function main() {
   console.log("🌱 开始写入种子数据...");
 
-  // ── 创建管理员 ──
   const passwordHash = await bcrypt.hash("admin123", 10);
   const admin = await prisma.user.upsert({
     where: { username: "admin" },
@@ -29,7 +34,6 @@ async function main() {
   });
   console.log(`  ✓ 管理员: ${admin.username}`);
 
-  // ── 创建分类 ──
   const categories = await Promise.all([
     prisma.category.upsert({
       where: { slug: "tech" },
@@ -44,7 +48,6 @@ async function main() {
   ]);
   console.log(`  ✓ 分类: ${categories.map((c) => c.name).join(", ")}`);
 
-  // ── 创建示例文章 ──
   const posts = [
     {
       title: "Hello World — 我的第一篇博客",
